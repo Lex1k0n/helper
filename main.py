@@ -10,9 +10,14 @@ import ctypes
 import webbrowser
 import platform
 import time
-from PyQt5.QtWidgets import QLabel, QDialog, QApplication, QVBoxLayout, QGroupBox, QHBoxLayout, QPushButton, QComboBox
+from PyQt5.QtWidgets import QTextEdit, QLabel, QDialog, QApplication, QVBoxLayout, QGroupBox, QHBoxLayout, \
+    QPushButton, QComboBox
 from PyQt5.QtGui import QIcon
 from sys import argv, exit
+import warnings
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
+pd.options.mode.chained_assignment = None
 
 
 class MainWindow(QDialog):
@@ -25,7 +30,7 @@ class MainWindow(QDialog):
         super(MainWindow, self).__init__()
 
         self.data = pd.DataFrame()
-        with open('data.csv') as file:
+        with open('data.csv', encoding='utf-8') as file:
             self.data = pd.read_csv(file)
 
         actions = ['открыть сайт', 'открыть приложение']
@@ -38,7 +43,7 @@ class MainWindow(QDialog):
 
         main_layout = QVBoxLayout()
 
-        self.activation_word = 'джимбо'
+        self.activation_word = list((self.data.loc[self.data['type'] == 'activation']['command']))[0]
         self.temp_activation_word = self.activation_word
 
         activation_group_box = QGroupBox('Activation Word')  # изменение активации
@@ -62,9 +67,9 @@ class MainWindow(QDialog):
         add_command_group_box = QGroupBox('Add Command')  # добавление команды
         add_command_layout = QHBoxLayout()
 
-        choose_action = QComboBox()
-        choose_action.addItems(actions)
-        add_command_layout.addWidget(choose_action)
+        self.choose_action = QComboBox()  # выбрать действие
+        self.choose_action.addItems(actions)
+        add_command_layout.addWidget(self.choose_action)
 
         self.command_word_label = QLabel('Add Command -> ')  # текущая команда
         add_command_layout.addWidget(self.command_word_label)
@@ -80,6 +85,9 @@ class MainWindow(QDialog):
         add_command_layout.addWidget(save_command_button)
 
         main_layout.addWidget(add_command_group_box)
+
+        self.current_ref = QTextEdit('Enter your ref/way here')  # поле ввода ссылки
+        main_layout.addWidget(self.current_ref)
 
         activation_group_box.setLayout(activation_layout)  # назначения лайаутов по виджетам
         add_command_group_box.setLayout(add_command_layout)
@@ -113,15 +121,12 @@ class MainWindow(QDialog):
             print("Неизвестная операционная система")
 
     def process_open_site_command(self, command):
-        sites = {
-            "телеграм": "https://web.telegram.org/k/#@jestelf",
-            "вк": "https://vk.com",
-            "нейросеть": "https://openai.com/gpt-3",
-            "лучшему другу": "https://go-friend-go.narod.ru/"
-        }
 
-        for site_name, site_url in sites.items():
-            if site_name in command:
+        for i, row in self.data.iterrows():
+            site_name = row.command
+            site_url = row.url
+            site_type = row.type
+            if site_name in command and site_type == 'site':
                 print(f"Попытка открыть сайт {site_name}")
                 try:
                     self.open_url(site_url)
@@ -131,6 +136,24 @@ class MainWindow(QDialog):
                 return True
 
         print("Название сайта не распознано")
+        return False
+
+    def process_open_app_command(self, command):
+
+        for i, row in self.data.iterrows():
+            app_name = row.command
+            app_path = row.url
+            app_type = row.type
+            if app_name in command and app_type == 'app':
+                print(f"Попытка открыть приложение {app_name}")
+                try:
+                    os.startfile(app_path)
+                    print(f"Приложение {app_name} открыто")
+                except Exception as e:
+                    print(f"Ошибка при открытии приложения {app_name}: {e}")
+                return True
+
+        print("Название приложения не распознано")
         return False
 
     def command_recognition(self, recognizer, audio_queue):
@@ -167,6 +190,9 @@ class MainWindow(QDialog):
                 print(f"Распознанная команда: {command}")
 
                 if "открой сайт" in command and self.process_open_site_command(command):
+                    partial_result = ''
+
+                if "открой приложение" in command and self.process_open_app_command(command):
                     partial_result = ''
 
                 elif "хайд" in command:
@@ -223,6 +249,8 @@ class MainWindow(QDialog):
 
     def save_activation_word(self):
         self.activation_word = self.temp_activation_word
+        self.data.loc[0]['command'] = self.activation_word
+        self.save_data()
 
     def command_settings(self):
         self.settings_command_record = not self.settings_command_record
@@ -233,13 +261,23 @@ class MainWindow(QDialog):
             self.start_command_button.setIcon(self.play_icon)
 
     def save_command(self):
-        pass
+        typo = ''
+        if self.choose_action.currentText() == 'открыть сайт':
+            typo = 'site'
+        elif self.choose_action.currentText() == 'открыть приложение':
+            typo = 'app'
+        self.data.loc[len(self.data.index)] = [typo, self.command_word_label.text(),
+                                               self.current_ref.toPlainText()]
+        self.save_data()
+
+    def save_data(self):
+        self.data.to_csv('data.csv', encoding='utf-8', index=False)
 
 
 if __name__ == "__main__":
     mod_path = f"{os.path.dirname(os.path.realpath(__file__))}\\vosk-model-small-ru-0.22"
     app = QApplication(argv)
     window = MainWindow()
-    window.resize(300, 300)
     window.setWindowTitle('Helper')
+    window.resize(10, 100)
     window.listen_for_commands(mod_path, window)
