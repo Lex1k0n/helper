@@ -15,6 +15,9 @@ from PyQt5.QtWidgets import QTextEdit, QLabel, QDialog, QApplication, QVBoxLayou
 from PyQt5.QtGui import QIcon
 from sys import argv, exit
 import warnings
+from keyboard import is_pressed
+from playsound import playsound
+from random import randint
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 pd.options.mode.chained_assignment = None
@@ -30,6 +33,8 @@ class MainWindow(QDialog):
         super(MainWindow, self).__init__()
 
         self.data = pd.DataFrame()
+        self.hello_phrases = ['audio\\doing.mp3', 'audio\\doing2.mp3', 'audio\\doing3.mp3']
+        self.gb_phrases = ['audio\\gb.mp3', 'audio\\gb2.mp3']
         with open('data.csv', encoding='utf-8') as file:
             self.data = pd.read_csv(file)
 
@@ -131,6 +136,8 @@ class MainWindow(QDialog):
                 try:
                     self.open_url(site_url)
                     print(f"Сайт {site_name} открыт")
+
+                    self.random_greets_answer()
                 except Exception as e:
                     print(f"Ошибка при открытии сайта {site_name}: {e}")
                 return True
@@ -149,6 +156,8 @@ class MainWindow(QDialog):
                 try:
                     os.startfile(app_path)
                     print(f"Приложение {app_name} открыто")
+
+                    self.random_greets_answer()
                 except Exception as e:
                     print(f"Ошибка при открытии приложения {app_name}: {e}")
                 return True
@@ -177,6 +186,7 @@ class MainWindow(QDialog):
 
                 if waiting_for_keyword and self.activation_word in command:
                     print("Ключевое слово распознано, ожидаю команду...")
+                    playsound('audio\\listen.mp3')
                     waiting_for_keyword = False
                     if console_hidden:
                         self.show_console()
@@ -192,7 +202,7 @@ class MainWindow(QDialog):
                 if "открой сайт" in command and self.process_open_site_command(command):
                     partial_result = ''
 
-                if "открой приложение" in command and self.process_open_app_command(command):
+                elif "открой приложение" in command and self.process_open_app_command(command):
                     partial_result = ''
 
                 elif "хайд" in command:
@@ -205,11 +215,16 @@ class MainWindow(QDialog):
                 elif "стоп" in command:
                     print(f"Ожидаю команду '{self.activation_word}' для активации")
                     waiting_for_keyword = True
+                    self.random_gb_answer()
                     partial_result = ''
 
                 elif "консоль" in command:
                     print("Открываю консоль...")
                     os.system("start cmd")
+
+                elif "добавь сайт" in command:
+                    request = command.replace('добавь сайт', '')
+                    print(request)
 
                 partial_result = ''
 
@@ -237,7 +252,8 @@ class MainWindow(QDialog):
         print("Слушаю...")
 
         while True:
-            interface.exec_()
+            if is_pressed('ctrl') and is_pressed('shift') and is_pressed('h'):
+                interface.exec_()
 
     def activation_settings(self):
         self.settings_activation_record = not self.settings_activation_record
@@ -269,6 +285,14 @@ class MainWindow(QDialog):
         self.data.loc[len(self.data.index)] = [typo, self.command_word_label.text(),
                                                self.current_ref.toPlainText()]
         self.save_data()
+
+    def random_greets_answer(self):
+        phrase = randint(0, 2)
+        playsound(self.hello_phrases[phrase])
+
+    def random_gb_answer(self):
+        phrase = randint(0, 1)
+        playsound(self.gb_phrases[phrase])
 
     def save_data(self):
         self.data.to_csv('data.csv', encoding='utf-8', index=False)
